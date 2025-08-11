@@ -1,17 +1,19 @@
 
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import * as schema from "@shared/schema";
 
-// Use in-memory database for temporary preview
-const sqlite = new Database(':memory:');
-export const db = drizzle({ client: sqlite, schema });
+// Create PostgreSQL connection pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 10,
+});
+
+export const db = drizzle({ client: pool, schema });
 
 // Initialize database with tables and sample data
 export async function initializeDatabase() {
   try {
-    // Create tables (these will be auto-created by Drizzle, but we'll ensure they exist)
-    
     // Create sample membership tiers
     const membershipTiers = [
       {
@@ -42,7 +44,7 @@ export async function initializeDatabase() {
 
     // Insert membership tiers
     for (const tier of membershipTiers) {
-      await db.insert(schema.membershipTiers).values(tier);
+      await db.insert(schema.membershipTiers).values(tier).onConflictDoNothing();
     }
 
     // Create sample users
@@ -72,12 +74,14 @@ export async function initializeDatabase() {
 
     const insertedUsers = [];
     for (const user of sampleUsers) {
-      const [insertedUser] = await db.insert(schema.users).values(user).returning();
-      insertedUsers.push(insertedUser);
+      const [insertedUser] = await db.insert(schema.users).values(user).onConflictDoNothing().returning();
+      if (insertedUser) {
+        insertedUsers.push(insertedUser);
+      }
     }
 
     // Create sample member profile for John Doe
-    const memberUser = insertedUsers.find(u => u.email === "john.doe@example.com");
+    const memberUser = insertedUsers.find(u => u?.email === "john.doe@example.com");
     const accessTier = await db.select().from(schema.membershipTiers).where(schema.membershipTiers.name.eq("Access")).limit(1);
     
     if (memberUser && accessTier.length > 0) {
@@ -86,11 +90,11 @@ export async function initializeDatabase() {
         membershipTierId: accessTier[0].id,
         emergencyContact: "emergency@example.com",
         fitnessGoals: "General fitness and weight loss"
-      });
+      }).onConflictDoNothing();
     }
 
     // Create sample trainer profile for Jane Smith
-    const trainerUser = insertedUsers.find(u => u.email === "jane.trainer@example.com");
+    const trainerUser = insertedUsers.find(u => u?.email === "jane.trainer@example.com");
     if (trainerUser) {
       await db.insert(schema.trainerProfiles).values({
         userId: trainerUser.id,
@@ -100,11 +104,11 @@ export async function initializeDatabase() {
         hourlyRate: 75.00,
         bio: "Experienced personal trainer specializing in weight loss and strength training.",
         isAvailable: true
-      });
+      }).onConflictDoNothing();
     }
 
-    console.log("Database initialized with sample data");
+    console.log("PostgreSQL database initialized with sample data");
   } catch (error) {
-    console.error("Error initializing database:", error);
+    console.error("Error initializing PostgreSQL database:", error);
   }
 }

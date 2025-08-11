@@ -63,8 +63,9 @@ app.use((req, res, next) => {
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
 
-  // Initialize MongoDB with sample data
-  await initializeMongoDB();
+  // Initialize PostgreSQL with sample data
+  const { initializeDatabase } = await import('./db.js');
+  await initializeDatabase();
 
   server.listen({
     port,
