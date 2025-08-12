@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import session from 'express-session';
-import { mongoStorage } from "./mongoStorage.js";
+import { storage } from "./storage.js";
 // Remove auth temporarily for MongoDB setup  
 // import { setupAuth, isAuthenticated } from "./replitAuth";
 
@@ -22,22 +22,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Temporarily disable auth for MongoDB setup
 
-  // Test MongoDB connection
-  app.get('/api/test-mongo', async (req, res) => {
-    try {
-      const tiers = await mongoStorage.getMembershipTiers();
-      res.json({ 
-        message: "External MongoDB connected successfully to gymdata database", 
-        tiersCount: tiers.length,
-        database: "gymdata",
-        host: "localhost:27017",
-        testCompleted: true 
-      });
-    } catch (error) {
-      console.error("MongoDB test error:", error);
-      res.status(500).json({ message: "MongoDB connection failed", error: error.message });
-    }
-  });
+  
 
   // Contact form submission
   app.post('/api/contact', async (req, res) => {
@@ -50,6 +35,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Store contact submission in database
+      /*
       const contactSubmission = {
         firstName,
         lastName,
@@ -62,13 +48,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'new'
       };
 
-      const result = await mongoStorage.storeContactSubmission(contactSubmission);
-      
+      const result = await storage.storeContactSubmission(contactSubmission);
+      */
       console.log('Contact form submitted:', { firstName, lastName, email, location, interest });
       
       res.json({ 
         message: "Contact form submitted successfully",
-        submissionId: result.insertedId
       });
     } catch (error) {
       console.error("Contact form submission error:", error);
@@ -79,7 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize membership tiers
   app.get('/api/init', async (req, res) => {
     try {
-      const existingTiers = await mongoStorage.getMembershipTiers();
+      const existingTiers = await storage.getMembershipTiers();
       if (existingTiers.length === 0) {
         const tiers = [
           {
@@ -109,7 +94,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ];
 
         for (const tier of tiers) {
-          await mongoStorage.createMembershipTier(tier);
+          await storage.createMembershipTier(tier);
         }
       }
       
@@ -124,7 +109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub || '507f1f77bcf86cd799439011'; // Mock user ID for testing
-      const user = await mongoStorage.getUser(userId);
+      const user = await storage.getUser(userId);
       
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -133,9 +118,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get additional profile data based on user type
       let profileData = null;
       if (user?.userType === 'member') {
-        profileData = await mongoStorage.getMemberProfile(userId);
+        profileData = await storage.getMemberProfile(userId);
       } else if (user?.userType === 'trainer') {
-        profileData = await mongoStorage.getTrainerProfile(userId);
+        profileData = await storage.getTrainerProfile(userId);
       }
 
       res.json({ ...user, profileData });
@@ -148,7 +133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Membership tiers
   app.get('/api/membership-tiers', async (req, res) => {
     try {
-      const tiers = await mongoStorage.getMembershipTiers();
+      const tiers = await storage.getMembershipTiers();
       res.json(tiers);
     } catch (error) {
       console.error("Error fetching membership tiers:", error);
@@ -165,7 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId
       };
 
-      const profile = await mongoStorage.createMemberProfile(profileData);
+      const profile = await storage.createMemberProfile(profileData);
       res.json(profile);
     } catch (error) {
       console.error("Error creating member profile:", error);
@@ -182,7 +167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId
       };
 
-      const profile = await mongoStorage.createTrainerProfile(profileData);
+      const profile = await storage.createTrainerProfile(profileData);
       res.json(profile);
     } catch (error) {
       console.error("Error creating trainer profile:", error);
@@ -193,7 +178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get trainers
   app.get('/api/trainers', isAuthenticated, async (req, res) => {
     try {
-      const trainers = await mongoStorage.getAllTrainers();
+      const trainers = await storage.getAllTrainers();
       res.json(trainers);
     } catch (error) {
       console.error("Error fetching trainers:", error);
@@ -205,18 +190,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/training-sessions', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub || '507f1f77bcf86cd799439011';
-      const user = await mongoStorage.getUser(userId);
+      const user = await storage.getUser(userId);
       
       let sessions = [];
       if (user?.userType === 'member') {
-        const memberProfile = await mongoStorage.getMemberProfile(userId);
+        const memberProfile = await storage.getMemberProfile(userId);
         if (memberProfile) {
-          sessions = await mongoStorage.getTrainingSessionsByMember(memberProfile._id.toString());
+          sessions = await storage.getTrainingSessionsByMember(memberProfile.id.toString());
         }
       } else if (user?.userType === 'trainer') {
-        const trainerProfile = await mongoStorage.getTrainerProfile(userId);
+        const trainerProfile = await storage.getTrainerProfile(userId);
         if (trainerProfile) {
-          sessions = await mongoStorage.getTrainingSessionsByTrainer(trainerProfile._id.toString());
+          sessions = await storage.getTrainingSessionsByTrainer(trainerProfile.id.toString());
         }
       }
 
@@ -230,7 +215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create training session
   app.post('/api/training-sessions', isAuthenticated, async (req: any, res) => {
     try {
-      const session = await mongoStorage.createTrainingSession(req.body);
+      const session = await storage.createTrainingSession(req.body);
       res.json(session);
     } catch (error) {
       console.error("Error creating training session:", error);
@@ -242,18 +227,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/workout-plans', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub || '507f1f77bcf86cd799439011';
-      const user = await mongoStorage.getUser(userId);
+      const user = await storage.getUser(userId);
       
       let plans = [];
       if (user?.userType === 'member') {
-        const memberProfile = await mongoStorage.getMemberProfile(userId);
+        const memberProfile = await storage.getMemberProfile(userId);
         if (memberProfile) {
-          plans = await mongoStorage.getWorkoutPlansByMember(memberProfile._id.toString());
+          plans = await storage.getWorkoutPlansByMember(memberProfile.id.toString());
         }
       } else if (user?.userType === 'trainer') {
-        const trainerProfile = await mongoStorage.getTrainerProfile(userId);
+        const trainerProfile = await storage.getTrainerProfile(userId);
         if (trainerProfile) {
-          plans = await mongoStorage.getWorkoutPlansByTrainer(trainerProfile._id.toString());
+          plans = await storage.getWorkoutPlansByTrainer(trainerProfile.id.toString());
         }
       }
 
@@ -267,7 +252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create workout plan
   app.post('/api/workout-plans', isAuthenticated, async (req: any, res) => {
     try {
-      const plan = await mongoStorage.createWorkoutPlan(req.body);
+      const plan = await storage.createWorkoutPlan(req.body);
       res.json(plan);
     } catch (error) {
       console.error("Error creating workout plan:", error);
@@ -279,18 +264,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/nutrition-plans', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub || '507f1f77bcf86cd799439011';
-      const user = await mongoStorage.getUser(userId);
+      const user = await storage.getUser(userId);
       
       let plans = [];
       if (user?.userType === 'member') {
-        const memberProfile = await mongoStorage.getMemberProfile(userId);
+        const memberProfile = await storage.getMemberProfile(userId);
         if (memberProfile) {
-          plans = await mongoStorage.getNutritionPlansByMember(memberProfile._id.toString());
+          plans = await storage.getNutritionPlansByMember(memberProfile.id.toString());
         }
       } else if (user?.userType === 'trainer') {
-        const trainerProfile = await mongoStorage.getTrainerProfile(userId);
+        const trainerProfile = await storage.getTrainerProfile(userId);
         if (trainerProfile) {
-          plans = await mongoStorage.getNutritionPlansByTrainer(trainerProfile._id.toString());
+          plans = await storage.getNutritionPlansByTrainer(trainerProfile.id.toString());
         }
       }
 
@@ -304,7 +289,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create nutrition plan
   app.post('/api/nutrition-plans', isAuthenticated, async (req: any, res) => {
     try {
-      const plan = await mongoStorage.createNutritionPlan(req.body);
+      const plan = await storage.createNutritionPlan(req.body);
       res.json(plan);
     } catch (error) {
       console.error("Error creating nutrition plan:", error);
@@ -315,7 +300,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin routes
   app.get('/api/admin/members', async (req, res) => {
     try {
-      const members = await mongoStorage.getAllMembers();
+      const members = await storage.getAllMembers();
       res.json(members);
     } catch (error) {
       console.error("Error fetching members:", error);
@@ -325,7 +310,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/admin/trainers', async (req, res) => {
     try {
-      const trainers = await mongoStorage.getAllTrainers();
+      const trainers = await storage.getAllTrainers();
       res.json(trainers);
     } catch (error) {
       console.error("Error fetching trainers:", error);
@@ -335,7 +320,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/admin/stats', async (req, res) => {
     try {
-      const stats = await mongoStorage.getAdminStats();
+      const stats = await storage.getAdminStats();
       res.json(stats);
     } catch (error) {
       console.error("Error fetching admin stats:", error);
@@ -351,7 +336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
-      const newUser = await mongoStorage.createUser({
+      const newUser = await storage.createUser({
         email,
         firstName,
         lastName,
@@ -359,8 +344,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         phone: phone || null
       });
 
-      const memberProfile = await mongoStorage.createMemberProfile({
-        userId: newUser._id.toString(),
+      const memberProfile = await storage.createMemberProfile({
+        userId: newUser.id,
         membershipTierId,
         emergencyContact: emergencyContact || email,
         fitnessGoals: fitnessGoals || "General fitness improvement"
@@ -381,15 +366,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
-      const newUser = await mongoStorage.createUser({
+      const newUser = await storage.createUser({
         email,
         firstName,
         lastName,
         userType: 'trainer'
       });
 
-      const trainerProfile = await mongoStorage.createTrainerProfile({
-        userId: newUser._id.toString(),
+      const trainerProfile = await storage.createTrainerProfile({
+        userId: newUser.id,
         specializations: specializations || [],
         hourlyRate: hourlyRate || "75.00",
         experienceYears: experienceYears || 2,
@@ -413,7 +398,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User ID is required" });
       }
 
-      await mongoStorage.deleteUser(userId);
+      await storage.deleteUser(userId);
       res.json({ message: "Member deleted successfully" });
     } catch (error: any) {
       console.error("Error deleting member:", error);
@@ -429,7 +414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User ID is required" });
       }
 
-      await mongoStorage.deleteUser(userId);
+      await storage.deleteUser(userId);
       res.json({ message: "Trainer deleted successfully" });
     } catch (error: any) {
       console.error("Error deleting trainer:", error);
@@ -441,7 +426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/create-membership', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub || '507f1f77bcf86cd799439011';
-      const user = await mongoStorage.getUser(userId);
+      const user = await storage.getUser(userId);
 
       if (!user) {
         return res.status(404).json({ error: { message: "User not found" } });
@@ -452,14 +437,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: { message: 'Membership tier ID is required' } });
       }
 
-      const membershipTier = await mongoStorage.getMembershipTier(membershipTierId);
+      const membershipTier = await storage.getMembershipTier(membershipTierId);
       if (!membershipTier) {
         return res.status(400).json({ error: { message: 'Invalid membership tier' } });
       }
 
-      let memberProfile = await mongoStorage.getMemberProfile(userId);
+      let memberProfile = await storage.getMemberProfile(userId);
       if (!memberProfile) {
-        memberProfile = await mongoStorage.createMemberProfile({
+        memberProfile = await storage.createMemberProfile({
           userId,
           membershipTierId,
           fitnessGoals: "Transform my fitness journey",
@@ -469,9 +454,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const subscriptionId = `sub_${Date.now()}`;
 
-      const subscription = await mongoStorage.createSubscription({
+      const subscription = await storage.createSubscription({
         id: subscriptionId,
-        memberId: memberProfile._id.toString(),
+        memberId: memberProfile.id,
         membershipTierId,
         startDate: new Date(),
         endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),

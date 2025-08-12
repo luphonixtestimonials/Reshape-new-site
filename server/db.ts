@@ -1,15 +1,13 @@
 
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { eq } from 'drizzle-orm';
+import Database from 'better-sqlite3';
 import * as schema from "@shared/schema";
 
-// Create PostgreSQL connection pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 10,
-});
+// Create SQLite connection
+const sqlite = new Database('sqlite.db');
 
-export const db = drizzle({ client: pool, schema });
+export const db = drizzle(sqlite, { schema });
 
 // Initialize database with tables and sample data
 export async function initializeDatabase() {
@@ -82,7 +80,7 @@ export async function initializeDatabase() {
 
     // Create sample member profile for John Doe
     const memberUser = insertedUsers.find(u => u?.email === "john.doe@example.com");
-    const accessTier = await db.select().from(schema.membershipTiers).where(schema.membershipTiers.name.eq("Access")).limit(1);
+    const accessTier = await db.select().from(schema.membershipTiers).where(eq(schema.membershipTiers.name, "Access")).limit(1);
     
     if (memberUser && accessTier.length > 0) {
       await db.insert(schema.memberProfiles).values({
@@ -107,8 +105,8 @@ export async function initializeDatabase() {
       }).onConflictDoNothing();
     }
 
-    console.log("PostgreSQL database initialized with sample data");
+    console.log("SQLite database initialized with sample data");
   } catch (error) {
-    console.error("Error initializing PostgreSQL database:", error);
+    console.error("Error initializing SQLite database:", error);
   }
 }
